@@ -55,7 +55,7 @@ function adminify(code){
 
 async function joinChannel(c){
   channel = c
-  console.log(v2)
+  console.log('joining channel '+c)
   if (!(channel in v2)){
 
     console.log("creating ",channel, "in ", v2)
@@ -257,7 +257,11 @@ for (let l of listenFor){
   window.addEventListener(l,userInputed)
 }
 
+let inited = false
 function init(){
+
+  if (inited){return}
+  inited = true
 
   while (name=="" || name==undefined || name.includes(" ")){
     name = prompt("Enter name (no spaces): ")
