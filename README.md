@@ -6,6 +6,7 @@ This is the source code for docs chat v2. This is an online chat that mimics the
 - Realtime messaging
 - active user display
 - joining different channels
+- private messaging
 
 ## How to use
 
