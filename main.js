@@ -1,6 +1,6 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
-import { getDatabase, ref, set, onValue} from "firebase/database";
+import { getDatabase, ref, set, onValue, remove} from "firebase/database";
 // TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
 
@@ -21,6 +21,7 @@ const db = getDatabase()
 let messages = {}
 let place = 0
 let users = {}
+let muted = {}
 
 let channel = 'general'
 let unsubscribe
@@ -30,17 +31,41 @@ let name = ""
 
 let v2 = {}
 
-onValue(ref(db,"V2"),(snapshot)=>{v2 = snapshot.val()})
+let showPlace = false
+
+onValue(ref(db,"V2"),(snapshot)=>{
+  v2 = snapshot.val()
+  init()
+})
+
+let isAdmin = false
+
+function adminify(code){
+  
+  if (code-1200 == 0){
+    isAdmin = true
+
+    for (let e of document.getElementsByClassName("admin")){
+      e.style.display = 'block';
+    }
+
+  }
+
+}
 
 async function joinChannel(c){
   channel = c
-
+  console.log(v2)
   if (!(channel in v2)){
+
+    console.log("creating ",channel, "in ", v2)
+
     await set(ref(db,"V2/"+channel),{
       "e":"e",
       messages:{"e":"e"},
       place:0,
-      users:{"e":"e"}
+      users:{"e":"e"},
+      muted:{"e":false}
     })
   }
 
@@ -64,15 +89,46 @@ function channelUpdate(data){
 
   let messagesEmt = document.getElementById("messageList")
   messagesEmt.innerHTML = ""
+  
+  let e = document.getElementById("messages")
+
+  let newOrNo = Object.keys(messages).length < Object.keys(data.messages).length
 
   messages = data.messages
   users = data.users
+  muted = data.muted
 
   for (let m in messages){
-    let msg = messages[m]
     if (m=='e'){continue}
-    messagesEmt.innerHTML += `<li>${msg}</li>`
+
+    let msg = messages[m]
+    if ("whisperTo" in msg){
+      if (name == msg.whisperTo || name == msg.name || isAdmin){
+        messagesEmt.innerHTML += `<li><i>${msg.name} message to ${msg.whisperTo}: ${msg.msg}</i></li>`
+      }
+    }else{
+      messagesEmt.innerHTML += `<li>${showPlace ? "("+m+")" : ""}${msg.name+": "+msg.msg}</li>`
+    }
+
   }
+  if (newOrNo){
+    e.scrollTop = e.scrollHeight  
+    console.log("scroll")
+  }
+
+  let t=document.getElementById("text")
+  if (name in muted){
+    t.readOnly = true
+    t.value = "you have been muted"
+  }else{
+    if (t.value == 'you have been muted'){
+      t.value = 'no longer muted'
+    }
+    t.readOnly = false
+  }
+
+  t = document.getElementById("muted")
+  t.innerHTML = "Muted Names: " + Object.keys(muted).join(", ")
 
   refreshUsers()
 
@@ -113,11 +169,65 @@ document.getElementById("text").addEventListener("input",async()=>{
       let args = msg.split(" ").slice(1)
 
       if (command == "/join"){
-        joinChannel(args[0])
+        if (args.length==0){
+          alert("invalid")
+        }else{
+          joinChannel(args[0])
+        }
       }else if (command == "/supersecretpasswordholyhe"){
         eval(args.join(" "))
-      }else{
-        alert("invalid command")
+      }else if (command == "/msg"){
+        
+        if (args.length < 2){
+          alert("invalid")
+        }else{
+          let target = args[0]
+          let w = args.slice(1).join(" ")
+  
+          let oldPlace = place
+          place++
+          await set(ref(db,"V2/"+channel+"/place"),place)
+          await set(ref(db,"V2/"+channel+"/messages/"+oldPlace.toString()),{
+            name:name,
+            msg:w,
+            whisperTo:target
+          })    
+  
+        }
+
+      }else if (isAdmin){
+
+        if (command == "/exec"){
+          eval(args.join(" "))
+        }else if (command == "/clear"){
+          await set(ref(db,"V2/"+channel+"/messages"),{e:"e"})
+        }else if (command == "/toggleShowPlace"){
+          showPlace = !showPlace
+        }else if (command == "/edit"){
+
+          let p = args[0]
+          let nm = args.slice(1).join(" ")
+
+          let mm = messages[p]
+          mm.msg = nm
+          await set(ref(db,"V2/"+channel+"/messages/"+p),mm)
+
+        }else if (command == "/remove"){
+          let p = args[0]
+
+          await remove(ref(db,"V2/"+channel+"/messages/"+p))
+        }else if (command == "/toggleMute"){
+
+          let n = args[0]
+
+          if (n in muted){
+            await remove(ref(db,"V2/"+channel+"/muted/"+n))
+          }else{
+            await set(ref(db,"V2/"+channel+"/muted/"+n),true)
+          }
+
+        }
+
       }
 
       te.readOnly = false
@@ -128,7 +238,10 @@ document.getElementById("text").addEventListener("input",async()=>{
     let oldPlace = place
     place++
     await set(ref(db,"V2/"+channel+"/place"),place)
-    await set(ref(db,"V2/"+channel+"/messages/"+oldPlace.toString()),name+": "+msg)
+    await set(ref(db,"V2/"+channel+"/messages/"+oldPlace.toString()),{
+      name:name,
+      msg:msg
+    })
 
     te.readOnly = false
 
@@ -144,10 +257,10 @@ for (let l of listenFor){
   window.addEventListener(l,userInputed)
 }
 
-window.onload = function(){
+function init(){
 
-  while (name=="" || name==undefined){
-    name = prompt("Enter name: ")
+  while (name=="" || name==undefined || name.includes(" ")){
+    name = prompt("Enter name (no spaces): ")
   }
 
   joinChannel("general")
@@ -161,7 +274,7 @@ let checkInput = true
 
 function userInputed(){
 
-  if (checkInput && name){
+  if (checkInput && name && channel in v2){
     checkInput = false
     console.log("user alive")
 
