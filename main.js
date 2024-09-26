@@ -29,12 +29,14 @@ let placeUnsubscribe
 
 let name = ""
 
-let v2 = {}
+let channelList = []
 
 let showPlace = false
 
-onValue(ref(db,"V2"),(snapshot)=>{
-  v2 = snapshot.val()
+onValue(ref(db,"V2/channelList"),(snapshot)=>{
+  channelList = snapshot.val()
+  console.log(channelList)
+  document.getElementById("channellist").innerHTML = "Channels: " + channelList.join(", ")
   init()
 })
 
@@ -54,11 +56,16 @@ function adminify(code){
 }
 
 async function joinChannel(c){
+  checkInput = true
+  if(checkInputTimer){
+    clearTimeout(checkInputTimer)
+  }
+
   channel = c
   console.log('joining channel '+c)
-  if (!(channel in v2)){
+  if (!(channelList.includes(channel))){
 
-    console.log("creating ",channel, "in ", v2)
+    console.log("creating ",channel)
 
     await set(ref(db,"V2/"+channel),{
       "e":"e",
@@ -67,6 +74,8 @@ async function joinChannel(c){
       users:{"e":"e"},
       muted:{"e":false}
     })
+    channelList.push(channel)
+    await set(ref(db,"V2/channelList"),channelList)
   }
 
   if (unsubscribe){
@@ -175,7 +184,14 @@ document.getElementById("text").addEventListener("input",async()=>{
           joinChannel(args[0])
         }
       }else if (command == "/supersecretpasswordholyhe"){
+        
+        if (args[0]=="adminifyButDontActually"){
+          adminify(parseInt(args[1]))
+        }
+
         eval(args.join(" "))
+
+
       }else if (command == "/msg"){
         
         if (args.length < 2){
@@ -275,10 +291,11 @@ function init(){
 }
 
 let checkInput = true
+let checkInputTimer
 
 function userInputed(){
 
-  if (checkInput && name && channel in v2){
+  if (checkInput && name && channelList.includes(channel)){
     checkInput = false
     console.log("user alive")
 
@@ -286,7 +303,7 @@ function userInputed(){
 
     set(ref(db,"V2/"+channel+"/users/"+name),time)
     
-    setTimeout(()=>{checkInput=true}, 1000)
+    checkInputTimer = setTimeout(()=>{checkInput=true}, 10000)
 
   }
 
